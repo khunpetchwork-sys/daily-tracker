@@ -202,6 +202,19 @@ main{width:100%;max-width:740px;margin:0 auto;padding:1rem}
 .habit-add-form.open{display:flex}
 
 .notice{font-size:10px;color:var(--text3);text-align:center;padding:1rem 0 0}
+
+/* autocomplete */
+.autocomplete-wrap{flex:1;position:relative;min-width:140px}
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:.5px solid var(--border2);border-radius:var(--rsm);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;max-height:200px;overflow-y:auto;margin-top:3px}
+.autocomplete-item{padding:8px 10px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:.5px solid var(--border)}
+.autocomplete-item:last-child{border-bottom:none}
+.autocomplete-item:hover,.autocomplete-item.active{background:var(--surface2)}
+.autocomplete-name{font-weight:500;color:var(--text)}
+.autocomplete-cal{font-size:11px;color:var(--text3)}
+
+/* streak badge */
+.streak-badge{display:inline-flex;align-items:center;gap:3px;background:var(--pink-l);color:var(--pink);border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:4px;white-space:nowrap}
+.hstat-num.streak{color:var(--pink)}
 </style>
 </head>
 <body>
@@ -284,9 +297,10 @@ main{width:100%;max-width:740px;margin:0 auto;padding:1rem}
     </div>
     <div class="add-form" id="food-form">
       <div class="form-row">
-        <div style="flex:1;position:relative;min-width:140px;">
-          <input type="text" id="food-name" placeholder="ชื่ออาหาร เช่น ข้าวผัดกะเพรา" oninput="onFoodInput()" onblur="triggerCalLookup()" style="width:100%;"/>
+        <div class="autocomplete-wrap">
+          <input type="text" id="food-name" placeholder="ชื่ออาหาร เช่น ข้าวผัดกะเพรา" oninput="onFoodInput()" onblur="hideAutoComplete()" autocomplete="off" style="width:100%;"/>
           <span id="cal-spinner" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text3);">⏳</span>
+          <div class="autocomplete-list" id="autocomplete-list" style="display:none;"></div>
         </div>
         <select id="food-meal" style="max-width:120px;">
           <option>🌅 เช้า</option><option>☀️ กลางวัน</option><option>🌙 เย็น</option><option>🍪 ของว่าง</option>
@@ -351,8 +365,11 @@ main{width:100%;max-width:740px;margin:0 auto;padding:1rem}
     <div class="hstat-grid">
       <div class="hstat"><div class="hstat-num" id="h-total">0</div><div class="hstat-label">Habits ทั้งหมด</div></div>
       <div class="hstat"><div class="hstat-num" id="h-today-done">0</div><div class="hstat-label">ทำวันนี้</div></div>
-      <div class="hstat"><div class="hstat-num" id="h-month-pct">0%</div><div class="hstat-label">เฉลี่ยเดือนนี้</div></div>
+      <div class="hstat"><div class="hstat-num streak" id="h-month-pct">0%</div><div class="hstat-label">เฉลี่ยเดือนนี้</div></div>
     </div>
+
+    <!-- streak per habit -->
+    <div id="streak-list" style="margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:6px;"></div>
   </div>
 
   <!-- full-width table (no padding) -->
@@ -674,6 +691,7 @@ function renderHabitChart(y,m){
   document.getElementById('h-today-done').textContent=todayDone;
   const avg=data.length?Math.round(data.reduce((s,v)=>s+v,0)/data.length):0;
   document.getElementById('h-month-pct').textContent=avg+'%';
+  renderStreaks();
 
   if(hChart){hChart.destroy();hChart=null;}
   const ctx=document.getElementById('habit-chart').getContext('2d');
@@ -935,32 +953,121 @@ async function renderMonthly(){
   }).join('');
 }
 
-// ── AI Cal ──
+// ── Thai Food Database ──
+const FOOD_DB=[
+  // ข้าวจานเดียว
+  {n:'ข้าวผัดกะเพราหมูสับ',c:420},{n:'ข้าวผัดกะเพราไก่',c:400},{n:'ข้าวผัดกะเพราทะเล',c:380},
+  {n:'ข้าวผัดหมู',c:450},{n:'ข้าวผัดไก่',c:420},{n:'ข้าวผัดกุ้ง',c:400},{n:'ข้าวผัดปู',c:390},
+  {n:'ข้าวมันไก่',c:480},{n:'ข้าวหมูแดง',c:520},{n:'ข้าวหมูกรอบ',c:560},{n:'ข้าวหน้าเป็ด',c:500},
+  {n:'ข้าวราดแกงเขียวหวาน',c:480},{n:'ข้าวราดแกงมัสมั่น',c:520},{n:'ข้าวราดแกงเผ็ด',c:460},
+  {n:'ข้าวราดพะแนง',c:490},{n:'ข้าวราดต้มยำ',c:400},{n:'ข้าวราดผัดกะเพรา',c:430},
+  {n:'ข้าวต้มหมู',c:180},{n:'ข้าวต้มไก่',c:160},{n:'ข้าวต้มกุ้ง',c:170},{n:'ข้าวต้มปลา',c:150},
+  {n:'ข้าวเหนียวหมูปิ้ง',c:350},{n:'ข้าวเหนียวไก่ย่าง',c:420},{n:'ข้าวเหนียวส้มตำ',c:380},
+  {n:'ข้าวเปล่า',c:160},{n:'ข้าวกล้อง',c:150},{n:'ข้าวเหนียว 1 ปั้น',c:130},
+  // ก๋วยเตี๋ยว/เส้น
+  {n:'ก๋วยเตี๋ยวน้ำหมู',c:280},{n:'ก๋วยเตี๋ยวน้ำไก่',c:260},{n:'ก๋วยเตี๋ยวน้ำตก',c:320},
+  {n:'ก๋วยเตี๋ยวแห้งหมู',c:350},{n:'ก๋วยเตี๋ยวผัดซีอิ๊ว',c:420},{n:'ผัดไทยกุ้ง',c:450},
+  {n:'ผัดไทยหมู',c:430},{n:'ผัดไทยไก่',c:420},{n:'บะหมี่น้ำ',c:300},{n:'บะหมี่แห้ง',c:380},
+  {n:'เส้นใหญ่ผัด',c:400},{n:'เส้นหมี่ผัด',c:380},{n:'วุ้นเส้นผัด',c:350},
+  {n:'ราเมนหมู',c:480},{n:'โซบะ',c:320},{n:'อุด้ง',c:380},
+  // แกง/ต้ม
+  {n:'ต้มยำกุ้งน้ำข้น',c:180},{n:'ต้มยำกุ้งน้ำใส',c:120},{n:'ต้มยำไก่',c:150},
+  {n:'ต้มข่าไก่',c:200},{n:'แกงเขียวหวานไก่',c:250},{n:'แกงมัสมั่นไก่',c:300},
+  {n:'แกงเผ็ดหมู',c:220},{n:'แกงส้ม',c:150},{n:'แกงจืดเต้าหู้',c:80},
+  // ยำ/ส้มตำ
+  {n:'ส้มตำไทย',c:120},{n:'ส้มตำปูปลาร้า',c:130},{n:'ส้มตำทะเล',c:140},
+  {n:'ยำวุ้นเส้น',c:180},{n:'ยำทะเล',c:160},{n:'ยำเนื้อ',c:200},
+  // กับข้าว
+  {n:'ไข่ดาว',c:90},{n:'ไข่เจียว',c:150},{n:'ไข่พะโล้',c:120},{n:'ไข่ลูกเขย',c:160},
+  {n:'หมูทอดกระเทียม',c:280},{n:'ไก่ทอด',c:320},{n:'ปลาทอด',c:250},
+  {n:'กุ้งผัดผงกะหรี่',c:200},{n:'ปลาผัดเผ็ด',c:220},
+  // อาหารเช้า
+  {n:'โจ๊กหมู',c:180},{n:'โจ๊กไก่',c:160},{n:'ปาท่องโก๋',c:200},
+  {n:'ขนมปังปิ้งเนยนม',c:180},{n:'ขนมปังปิ้งไข่',c:220},
+  {n:'แซนวิชไข่',c:280},{n:'แซนวิชทูน่า',c:260},
+  // ฟาสต์ฟู้ด
+  {n:'แฮมเบอร์เกอร์',c:450},{n:'ชีสเบอร์เกอร์',c:520},{n:'ไก่ทอด KFC 1 ชิ้น',c:280},
+  {n:'พิซซ่า 1 ชิ้น',c:280},{n:'เฟรนช์ฟรายส์',c:350},{n:'ฮอทด็อก',c:290},
+  {n:'ชาบู',c:300},{n:'บาร์บีคิว',c:400},
+  // เครื่องดื่ม
+  {n:'ชาเย็น',c:150},{n:'ชานมไข่มุก',c:300},{n:'กาแฟเย็น',c:120},{n:'กาแฟดำ',c:5},
+  {n:'น้ำผลไม้',c:110},{n:'น้ำเต้าหู้',c:80},{n:'นมสด',c:120},{n:'โกโก้เย็น',c:180},
+  {n:'น้ำอัดลม',c:140},{n:'เบียร์ 1 กระป๋อง',c:150},{n:'น้ำเปล่า',c:0},
+  // ของว่าง/ขนม
+  {n:'กล้วยหอม',c:90},{n:'กล้วยน้ำว้า',c:80},{n:'แอปเปิ้ล',c:70},{n:'ส้ม',c:60},
+  {n:'มะม่วงสุก',c:100},{n:'ทุเรียน 1 พู',c:150},{n:'มังคุด',c:70},
+  {n:'ขนมจีบ 1 ชิ้น',c:50},{n:'ซาลาเปา',c:150},{n:'ทองหยิบ',c:80},
+  {n:'บัวลอย',c:180},{n:'ข้าวเหนียวมะม่วง',c:380},{n:'วุ้นมะพร้าว',c:80},
+  {n:'โดนัท',c:250},{n:'เค้ก 1 ชิ้น',c:300},{n:'คุกกี้',c:130},
+  {n:'มันฝรั่งทอด',c:150},{n:'ป๊อปคอร์น',c:100},{n:'ถั่วต้ม',c:120},
+];
+
+let acIndex=-1;
+window.hideAutoComplete=function(){setTimeout(()=>{document.getElementById('autocomplete-list').style.display='none';},150);};
+
+function showAutoComplete(q){
+  const list=document.getElementById('autocomplete-list');
+  if(!q){list.style.display='none';return;}
+  const matches=FOOD_DB.filter(f=>f.n.includes(q)).slice(0,8);
+  if(!matches.length){list.style.display='none';return;}
+  acIndex=-1;
+  list.innerHTML=matches.map((f,i)=>
+    `<div class="autocomplete-item" onmousedown="selectFood('${f.n.replace(/'/g,"\\'")}',${f.c})" data-i="${i}">
+      <span class="autocomplete-name">${f.n}</span>
+      <span class="autocomplete-cal">${f.c} kcal</span>
+    </div>`).join('');
+  list.style.display='block';
+}
+
+window.selectFood=function(name,cal){
+  document.getElementById('food-name').value=name;
+  document.getElementById('food-cal-in').value=cal;
+  document.getElementById('autocomplete-list').style.display='none';
+  document.getElementById('cal-hint').textContent=`✦ จากฐานข้อมูลอาหารไทย — แก้ไขได้`;
+  document.getElementById('cal-hint').style.display='block';
+};
+
+// ── Food Input (autocomplete + AI fallback removed, use DB) ──
 let calTimer=null,lastLookedUp='';
 window.onFoodInput=function(){
   const name=document.getElementById('food-name').value.trim();
   clearTimeout(calTimer);
   document.getElementById('ai-badge').style.display='none';
   document.getElementById('cal-hint').style.display='none';
-  if(name.length<2) return;
-  calTimer=setTimeout(triggerCalLookup,900);
+  showAutoComplete(name);
+  // keyboard nav
+  document.getElementById('food-name').onkeydown=function(e){
+    const items=document.querySelectorAll('.autocomplete-item');
+    if(!items.length) return;
+    if(e.key==='ArrowDown'){e.preventDefault();acIndex=Math.min(acIndex+1,items.length-1);items.forEach((el,i)=>el.classList.toggle('active',i===acIndex));}
+    else if(e.key==='ArrowUp'){e.preventDefault();acIndex=Math.max(acIndex-1,0);items.forEach((el,i)=>el.classList.toggle('active',i===acIndex));}
+    else if(e.key==='Enter'&&acIndex>=0){e.preventDefault();e.stopPropagation();items[acIndex].dispatchEvent(new MouseEvent('mousedown'));}
+  };
 };
-window.triggerCalLookup=async function(){
-  const name=document.getElementById('food-name').value.trim();
-  if(!name||name===lastLookedUp||name.length<2) return;
-  lastLookedUp=name;
-  const sp=document.getElementById('cal-spinner'),bg=document.getElementById('ai-badge'),ht=document.getElementById('cal-hint'),ci=document.getElementById('food-cal-in');
-  sp.style.display='inline';ht.style.display='none';
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,
-        system:'Nutrition expert. Respond ONLY with JSON: {"calories":350,"per":"1 จาน (300g)"}. Integer only. JSON only.',
-        messages:[{role:'user',content:`Food: ${name}`}]})});
-    const data=await res.json();
-    const parsed=JSON.parse(data.content?.map(c=>c.text||'').join('').replace(/```json|```/g,'').trim());
-    if(parsed.calories&&!ci.value){ci.value=parsed.calories;bg.style.display='inline';ht.textContent=`✦ AI ประมาณ ${parsed.calories} kcal ต่อ ${parsed.per||'1 จาน'} — แก้ไขได้`;ht.style.display='block';}
-  }catch{}finally{sp.style.display='none';}
-};
+
+// ── Streak calculation ──
+function calcStreak(habitId){
+  let streak=0;
+  const d=new Date(NOW);
+  // start from yesterday if not done today, else from today
+  while(true){
+    const dk=dKey(d);
+    if(!habitChecks[`${dk}_${habitId}`]) break;
+    streak++;
+    d.setDate(d.getDate()-1);
+  }
+  return streak;
+}
+
+function renderStreaks(){
+  const el=document.getElementById('streak-list');
+  if(!el||!habits.length){if(el)el.innerHTML='';return;}
+  el.innerHTML=habits.map(h=>{
+    const s=calcStreak(h.id);
+    if(s===0) return '';
+    return `<div class="streak-badge">🔥 ${h.emoji||''}${h.name} ${s} วัน</div>`;
+  }).filter(Boolean).join('');
+}
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Enter'){
