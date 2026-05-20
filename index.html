@@ -173,11 +173,11 @@ main{width:100%;max-width:740px;margin:0 auto;padding:1rem}
 .habit-tbl th.col-name{text-align:left;padding:5px 10px;font-size:10px}
 .habit-tbl td{text-align:center;padding:4px 2px;border-bottom:.5px solid var(--border);vertical-align:middle}
 .habit-tbl tr:last-child td{border-bottom:none}
-.habit-tbl td.col-name{padding:6px 10px;text-align:left;white-space:nowrap}
+.habit-tbl td.col-name{padding:6px 10px;text-align:left;white-space:normal}
 
 /* name cell with inline edit */
 .habit-name-inner{display:flex;align-items:center;gap:5px}
-.habit-name-text{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;max-width:90px}
+.habit-name-text{font-size:12px;font-weight:500;white-space:normal;word-break:break-word;max-width:120px;line-height:1.3}
 .habit-name-input{font-size:12px;font-weight:500;background:var(--surface2);border:.5px solid var(--green);border-radius:4px;padding:2px 5px;outline:none;color:var(--text);font-family:inherit;width:88px}
 .habit-edit-icon{color:var(--text3);font-size:11px;cursor:pointer;flex-shrink:0;opacity:0;transition:opacity .15s}
 .habit-tbl tr:hover .habit-edit-icon{opacity:1}
