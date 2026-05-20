@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Daily Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f6f3;--surface:#fff;--surface2:#f0efe9;
+  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.16);
+  --text:#1a1a18;--text2:#6b6b66;--text3:#9f9f99;
+  --green:#1D9E75;--green-l:#e1f5ee;
+  --blue:#378ADD;--blue-l:#e6f1fb;
+  --pink:#c9796a;--pink-l:#faeae7;
+  --red:#e24b4a;--radius:10px;--rsm:7px;
+  --header-h:90px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#141412;--surface:#1e1e1b;--surface2:#2a2a26;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.16);
+  --text:#f0efe9;--text2:#9f9f99;--text3:#6b6b66;
+  --green-l:#0a3326;--blue-l:#0c2440;--pink-l:#3a1a16;
+}}
+
+html,body{height:100%;overflow-x:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:3rem}
+
+/* ── Header ── */
+header{background:var(--surface);border-bottom:.5px solid var(--border);position:sticky;top:0;z-index:200}
+.header-top{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1rem .625rem}
+.logo{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.logo span{color:var(--green)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;margin-left:5px;transition:background .3s;vertical-align:middle}
+.sync-dot.ok{background:var(--green)}.sync-dot.err{background:var(--red)}
+.tabs{display:flex;border-top:.5px solid var(--border)}
+.tab{flex:1;padding:9px 0;font-size:12px;font-weight:500;color:var(--text3);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;font-family:inherit}
+.tab.active{color:var(--text);border-bottom-color:var(--text)}
+
+/* ── Layout ── */
+main{width:100%;max-width:740px;margin:0 auto;padding:1rem}
+.page{display:none}.page.active{display:block}
+
+/* ── Day nav ── */
+.day-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.nav-btn{background:var(--surface);border:.5px solid var(--border2);border-radius:var(--rsm);width:32px;height:32px;cursor:pointer;font-size:18px;color:var(--text2);display:flex;align-items:center;justify-content:center;transition:background .1s;flex-shrink:0}
+.nav-btn:hover{background:var(--surface2)}.nav-btn:disabled{opacity:.3;cursor:default}
+.day-center{text-align:center}
+.day-title{font-size:15px;font-weight:700}
+.day-sub{font-size:11px;color:var(--text3);margin-top:1px}
+
+/* ── Summary cards ── */
+.summary-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:1rem}
+.metric{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);padding:12px 14px;position:relative}
+.metric-label{font-size:10px;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;justify-content:space-between}
+.metric-edit-btn{font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0 2px}
+.metric-edit-btn:hover{color:var(--text)}
+.metric-value{font-size:20px;font-weight:700}
+.metric-unit{font-size:12px;font-weight:400;color:var(--text2)}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:3px}
+.progress-wrap{background:var(--surface2);border-radius:99px;height:4px;margin-top:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:99px;transition:width .4s ease}
+.fill-green{background:var(--green)}.fill-blue{background:var(--blue)}
+
+/* ── Net ── */
+.net-section{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);padding:12px 14px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.net-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.net-value{font-size:18px;font-weight:700}
+.net-positive{color:var(--green)}.net-negative{color:var(--red)}
+.net-msg{font-size:11px;color:var(--text2);text-align:right;max-width:180px}
+
+/* ── Goal modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius);padding:20px;width:280px;box-shadow:0 8px 30px rgba(0,0,0,.15)}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:12px}
+.modal label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px}
+.modal input{width:100%;background:var(--surface2);border:.5px solid var(--border2);border-radius:var(--rsm);padding:8px 10px;font-size:14px;color:var(--text);font-family:inherit;outline:none;margin-bottom:12px}
+.modal input:focus{border-color:var(--green)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.btn-cancel{background:var(--surface2);border:.5px solid var(--border2);border-radius:var(--rsm);padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--text2)}
+.btn-save{background:var(--text);color:var(--bg);border:none;border-radius:var(--rsm);padding:6px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
+
+/* ── Section card ── */
+.section{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);margin-bottom:10px;overflow:hidden}
+.section-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:.5px solid var(--border)}
+.section-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.section-title svg{width:14px;height:14px;flex-shrink:0}
+.add-btn{font-size:11px;color:var(--text2);background:var(--surface2);border:.5px solid var(--border2);border-radius:var(--rsm);padding:4px 10px;cursor:pointer;font-family:inherit;transition:background .1s}
+.add-btn:hover{background:var(--border);color:var(--text)}
+
+/* ── Forms ── */
+.add-form{padding:10px 14px;border-bottom:.5px solid var(--border);display:none;flex-direction:column;gap:7px;background:var(--surface2)}
+.add-form.open{display:flex}
+.form-row{display:flex;gap:7px;flex-wrap:wrap}
+.form-row input,.form-row select{flex:1;min-width:90px;background:var(--surface);border:.5px solid var(--border2);border-radius:var(--rsm);padding:6px 9px;font-size:12px;color:var(--text);font-family:inherit;outline:none;transition:border-color .15s}
+.form-row input:focus,.form-row select:focus{border-color:var(--green)}
+.form-row input::placeholder{color:var(--text3)}
+.submit-btn{background:var(--text);color:var(--bg);border:none;border-radius:var(--rsm);padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.submit-btn:hover{opacity:.8}
+
+/* ── Entries ── */
+.entry-list{display:flex;flex-direction:column}
+.entry{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:.5px solid var(--border);transition:background .1s;animation:slideIn .18s ease}
+.entry:last-child{border-bottom:none}.entry:hover{background:var(--surface2)}
+@keyframes slideIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.entry-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.entry-icon.food{background:var(--green-l)}.entry-icon.exercise{background:var(--blue-l)}
+.entry-info{flex:1;min-width:0}
+.entry-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.entry-detail{font-size:11px;color:var(--text2);margin-top:1px}
+.entry-cal{font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0;min-width:56px;text-align:right}
+.entry-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.entry:hover .entry-actions{opacity:1}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--text3);padding:3px 4px;border-radius:4px;font-size:13px}
+.icon-btn:hover{background:var(--surface2);color:var(--text)}
+.icon-btn.del:hover{color:var(--red)}
+.empty-state{padding:24px 14px;text-align:center;font-size:12px;color:var(--text3)}
+
+/* ── History rows ── */
+.hist-item{display:flex;align-items:center;padding:11px 14px;border-bottom:.5px solid var(--border);cursor:pointer;transition:background .1s;gap:12px}
+.hist-item:last-child{border-bottom:none}.hist-item:hover{background:var(--surface2)}
+.hist-date{font-size:13px;font-weight:600;min-width:44px}
+.hist-date-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.hbars{flex:1;display:flex;flex-direction:column;gap:4px}
+.hbar-row{display:flex;align-items:center;gap:7px}
+.hbar-lbl{font-size:10px;color:var(--text3);width:52px;text-align:right;white-space:nowrap}
+.hbar-track{flex:1;background:var(--surface2);border-radius:99px;height:5px;overflow:hidden}
+.hbar-fill{height:100%;border-radius:99px}
+.hist-net{font-size:12px;font-weight:700;min-width:44px;text-align:right}
+.hist-arrow{font-size:13px;color:var(--text3)}
+
+/* ── Monthly ── */
+.month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.month-title{font-size:15px;font-weight:700}
+.mstat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem}
+.mstat{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);padding:10px 12px;text-align:center}
+.mstat-num{font-size:18px;font-weight:700;margin-bottom:2px}
+.mstat-label{font-size:10px;color:var(--text2)}
+.chart-card{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);padding:14px;margin-bottom:10px}
+.chart-legend{display:flex;gap:14px;margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)}
+.legend-dot{width:9px;height:9px;border-radius:2px}
+
+/* ══════════════════════════════════════════
+   HABIT TRACKER — full-width responsive
+═══════════════════════════════════════════ */
+#page-habits{padding:0}
+.habit-page-inner{padding:1rem}
+
+.habit-progress-card{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);padding:14px;margin-bottom:10px}
+.habit-progress-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.habit-chart-wrap{position:relative;width:100%;height:120px}
+
+.hstat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem}
+.hstat{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);padding:10px 12px;text-align:center}
+.hstat-num{font-size:18px;font-weight:700;color:var(--pink);margin-bottom:2px}
+.hstat-label{font-size:10px;color:var(--text2)}
+
+/* Full-width habit table */
+.habit-table-card{background:var(--surface);border-radius:var(--radius);border:.5px solid var(--border);overflow:hidden;margin-bottom:10px}
+.habit-table-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:.5px solid var(--border)}
+
+.habit-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.habit-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+
+/* sticky first column */
+.habit-tbl .col-name{position:sticky;left:0;background:var(--surface);z-index:10;width:130px;min-width:130px}
+.habit-tbl tr:hover .col-name{background:var(--surface2)}
+
+.habit-tbl th{font-size:9px;font-weight:600;color:var(--text3);text-align:center;padding:5px 2px;border-bottom:.5px solid var(--border);white-space:nowrap}
+.habit-tbl th.col-name{text-align:left;padding:5px 10px;font-size:10px}
+.habit-tbl td{text-align:center;padding:4px 2px;border-bottom:.5px solid var(--border);vertical-align:middle}
+.habit-tbl tr:last-child td{border-bottom:none}
+.habit-tbl td.col-name{padding:6px 10px;text-align:left;white-space:nowrap}
+
+/* name cell with inline edit */
+.habit-name-inner{display:flex;align-items:center;gap:5px}
+.habit-name-text{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;max-width:90px}
+.habit-name-input{font-size:12px;font-weight:500;background:var(--surface2);border:.5px solid var(--green);border-radius:4px;padding:2px 5px;outline:none;color:var(--text);font-family:inherit;width:88px}
+.habit-edit-icon{color:var(--text3);font-size:11px;cursor:pointer;flex-shrink:0;opacity:0;transition:opacity .15s}
+.habit-tbl tr:hover .habit-edit-icon{opacity:1}
+.habit-edit-icon:hover{color:var(--text)}
+
+/* check cell */
+.hchk{width:22px;height:22px;border-radius:5px;border:.5px solid var(--border2);background:var(--surface2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:12px;transition:background .12s,border-color .12s;user-select:none;-webkit-user-select:none}
+.hchk.done{background:var(--pink-l);border-color:var(--pink);color:var(--pink)}
+.hchk.future{opacity:.25;cursor:default;pointer-events:none}
+
+/* today column highlight */
+.col-today{background:rgba(55,138,221,0.06)}
+.habit-tbl th.col-today{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* pct row */
+.pct-cell{font-size:10px;font-weight:600}
+.col-count{font-size:11px;font-weight:700;color:var(--text2)}
+.col-actions{width:28px}
+
+/* add habit form */
+.habit-add-form{padding:10px 14px;border-top:.5px solid var(--border);display:none;flex-direction:column;gap:7px;background:var(--surface2)}
+.habit-add-form.open{display:flex}
+
+.notice{font-size:10px;color:var(--text3);text-align:center;padding:1rem 0 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="logo">daily<span>.</span>tracker <span class="sync-dot" id="sync-dot"></span></div>
+    <div id="header-date" style="font-size:11px;color:var(--text2);"></div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('today')">วันนี้</button>
+    <button class="tab" onclick="switchTab('habits')">Habits</button>
+    <button class="tab" onclick="switchTab('history')">ประวัติ</button>
+    <button class="tab" onclick="switchTab('monthly')">รายเดือน</button>
+  </div>
+</header>
+
+<!-- Goal modal -->
+<div class="modal-overlay" id="goal-modal">
+  <div class="modal">
+    <h3>ตั้งเป้าหมาย</h3>
+    <label>แคลอรี่รับเข้า (kcal/วัน)</label>
+    <input type="number" id="goal-cal-in" min="500" max="9999"/>
+    <label>แคลอรี่เผาผลาญ (kcal/วัน)</label>
+    <input type="number" id="goal-burn-in" min="0" max="9999"/>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeGoalModal()">ยกเลิก</button>
+      <button class="btn-save" onclick="saveGoals()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<main>
+
+<!-- TODAY -->
+<div class="page active" id="page-today">
+  <div class="day-nav">
+    <button class="nav-btn" onclick="changeDay(-1)">‹</button>
+    <div class="day-center">
+      <div class="day-title" id="day-title"></div>
+      <div class="day-sub" id="day-sub"></div>
+    </div>
+    <button class="nav-btn" id="btn-next-day" onclick="changeDay(1)">›</button>
+  </div>
+
+  <div class="summary-grid">
+    <div class="metric">
+      <div class="metric-label">🍽 รับเข้า
+        <button class="metric-edit-btn" onclick="openGoalModal()" title="ตั้งเป้าหมาย">⚙️</button>
+      </div>
+      <div class="metric-value"><span id="total-cal">0</span><span class="metric-unit"> kcal</span></div>
+      <div class="metric-sub" id="sub-food">เป้า — kcal</div>
+      <div class="progress-wrap"><div class="progress-fill fill-green" id="bar-food" style="width:0%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">🔥 เผาผลาญ
+        <button class="metric-edit-btn" onclick="openGoalModal()" title="ตั้งเป้าหมาย">⚙️</button>
+      </div>
+      <div class="metric-value"><span id="total-burn">0</span><span class="metric-unit"> kcal</span></div>
+      <div class="metric-sub" id="sub-burn">เป้า — kcal</div>
+      <div class="progress-wrap"><div class="progress-fill fill-blue" id="bar-ex" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="net-section">
+    <div>
+      <div class="net-label">แคลอรี่สุทธิ</div>
+      <div class="net-value" id="net-cal">0 kcal</div>
+    </div>
+    <div class="net-msg" id="net-msg">เริ่มบันทึกมื้ออาหาร</div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11h18M12 3v8m-7 0a7 7 0 0 0 14 0"/><path d="M5 21h14"/></svg>
+        มื้ออาหาร
+      </div>
+      <button class="add-btn" onclick="toggleForm('food-form')">+ เพิ่ม</button>
+    </div>
+    <div class="add-form" id="food-form">
+      <div class="form-row">
+        <div style="flex:1;position:relative;min-width:140px;">
+          <input type="text" id="food-name" placeholder="ชื่ออาหาร เช่น ข้าวผัดกะเพรา" oninput="onFoodInput()" onblur="triggerCalLookup()" style="width:100%;"/>
+          <span id="cal-spinner" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text3);">⏳</span>
+        </div>
+        <select id="food-meal" style="max-width:120px;">
+          <option>🌅 เช้า</option><option>☀️ กลางวัน</option><option>🌙 เย็น</option><option>🍪 ของว่าง</option>
+        </select>
+      </div>
+      <div class="form-row" style="align-items:center;">
+        <div style="position:relative;max-width:120px;">
+          <input type="number" id="food-cal-in" placeholder="kcal" min="0" style="width:100%;"/>
+          <span id="ai-badge" style="display:none;position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:9px;background:#e1f5ee;color:#1D9E75;padding:1px 4px;border-radius:3px;pointer-events:none;">AI✦</span>
+        </div>
+        <input type="text" id="food-note" placeholder="หมายเหตุ (ไม่บังคับ)"/>
+        <button class="submit-btn" onclick="addFood()">เพิ่ม</button>
+      </div>
+      <div id="cal-hint" style="font-size:11px;color:var(--text2);display:none;"></div>
+    </div>
+    <div class="entry-list" id="food-list"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="5" r="1.5"/><path d="m9 12 1.5 4.5L12 21l1.5-4.5L15 12"/><path d="m6 9 3 3 3-3 3 3 3-3"/></svg>
+        การออกกำลังกาย
+      </div>
+      <button class="add-btn" onclick="toggleForm('ex-form')">+ เพิ่ม</button>
+    </div>
+    <div class="add-form" id="ex-form">
+      <div class="form-row">
+        <input type="text" id="ex-name" placeholder="เช่น วิ่ง, ว่ายน้ำ, ยกเวท"/>
+        <input type="number" id="ex-min" placeholder="นาที" min="0" style="max-width:75px;"/>
+        <input type="number" id="ex-cal-in" placeholder="kcal เผา" min="0" style="max-width:90px;"/>
+        <button class="submit-btn" onclick="addExercise()">เพิ่ม</button>
+      </div>
+    </div>
+    <div class="entry-list" id="ex-list"></div>
+  </div>
+  <div class="notice">sync ผ่าน Firebase — ใช้ได้ทุกอุปกรณ์</div>
+</div>
+
+<!-- HABITS -->
+<div class="page" id="page-habits">
+  <div class="habit-page-inner">
+    <div class="habit-month-nav" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <button class="nav-btn" onclick="changeHabitMonth(-1)">‹</button>
+      <div class="month-title" id="habit-month-title" style="font-size:15px;font-weight:700;"></div>
+      <button class="nav-btn" id="btn-next-hmonth" onclick="changeHabitMonth(1)">›</button>
+    </div>
+
+    <!-- realtime progress chart -->
+    <div class="habit-progress-card">
+      <div class="habit-progress-title">
+        <span>% ความสำเร็จรายวัน</span>
+        <div style="display:flex;gap:10px;">
+          <span style="display:flex;align-items:center;gap:3px;font-size:10px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--pink);display:inline-block;"></span>% สำเร็จ</span>
+        </div>
+      </div>
+      <div class="habit-chart-wrap">
+        <canvas id="habit-chart" role="img" aria-label="กราฟ % ความสำเร็จ habit รายวัน"></canvas>
+      </div>
+    </div>
+
+    <div class="hstat-grid">
+      <div class="hstat"><div class="hstat-num" id="h-total">0</div><div class="hstat-label">Habits ทั้งหมด</div></div>
+      <div class="hstat"><div class="hstat-num" id="h-today-done">0</div><div class="hstat-label">ทำวันนี้</div></div>
+      <div class="hstat"><div class="hstat-num" id="h-month-pct">0%</div><div class="hstat-label">เฉลี่ยเดือนนี้</div></div>
+    </div>
+  </div>
+
+  <!-- full-width table (no padding) -->
+  <div class="habit-table-card">
+    <div class="habit-table-header">
+      <div class="section-title" style="font-size:13px;font-weight:600;">📋 รายการ Habits</div>
+      <button class="add-btn" onclick="toggleHabitForm()">+ เพิ่ม Habit</button>
+    </div>
+    <div class="habit-add-form" id="habit-add-form">
+      <div class="form-row">
+        <input type="text" id="habit-name-in" placeholder="ชื่อ habit เช่น ตื่นเช้า"/>
+        <input type="text" id="habit-emoji" placeholder="emoji เช่น 🌅" style="max-width:70px;"/>
+        <button class="submit-btn" onclick="addHabit()">เพิ่ม</button>
+      </div>
+    </div>
+    <div class="habit-scroll" id="habit-scroll">
+      <div id="habit-table-wrap"></div>
+    </div>
+  </div>
+  <div style="padding:0 1rem;"><div class="notice">แตะชื่อ habit เพื่อแก้ไข • กดช่องวันที่เพื่อ tick</div></div>
+</div>
+
+<!-- HISTORY -->
+<div class="page" id="page-history">
+  <div class="section">
+    <div class="section-header"><div class="section-title">ประวัติทั้งหมด</div></div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<!-- MONTHLY -->
+<div class="page" id="page-monthly">
+  <div class="month-nav">
+    <button class="nav-btn" onclick="changeMonth(-1)">‹</button>
+    <div class="month-title" id="month-title"></div>
+    <button class="nav-btn" id="btn-next-month" onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="mstat-grid">
+    <div class="mstat"><div class="mstat-num" id="m-days">0</div><div class="mstat-label">วันที่บันทึก</div></div>
+    <div class="mstat"><div class="mstat-num" id="m-avg-cal">0</div><div class="mstat-label">เฉลี่ย kcal/วัน</div></div>
+    <div class="mstat"><div class="mstat-num" id="m-avg-burn">0</div><div class="mstat-label">เฉลี่ยเผา/วัน</div></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#1D9E75;"></div>รับเข้า</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#378ADD;"></div>เผาผลาญ</div>
+    </div>
+    <div style="position:relative;width:100%;height:190px;">
+      <canvas id="monthly-chart" role="img" aria-label="กราฟแคลอรี่รายวัน"></canvas>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header"><div class="section-title">สรุปรายวัน</div></div>
+    <div id="monthly-day-list"></div>
+  </div>
+</div>
+
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey:"AIzaSyBqXSAiX01a4krdIdja8m_fC9EcwLe0Iv8",
+  authDomain:"my-daily-tracker-dc2a1.firebaseapp.com",
+  projectId:"my-daily-tracker-dc2a1",
+  storageBucket:"my-daily-tracker-dc2a1.firebasestorage.app",
+  messagingSenderId:"73606484831",
+  appId:"1:73606484831:web:2c811f85253d8952739cea"
+};
+const app=initializeApp(firebaseConfig);
+const db=getFirestore(app);
+
+const SD=document.getElementById('sync-dot');
+const setSyncOk=()=>SD.className='sync-dot ok';
+const setSyncErr=()=>SD.className='sync-dot err';
+
+// ── Constants ──
+const NOW=new Date();
+const DAY_TH=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+const DAY_SH=['อา','จ','อ','พ','พฤ','ศ','ส'];
+const MON_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const MON_SH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+let dayOff=0, vMonth={y:NOW.getFullYear(),m:NOW.getMonth()};
+let hMonth={y:NOW.getFullYear(),m:NOW.getMonth()};
+let mChart=null, hChart=null;
+let cache={}, habits=[], habitChecks={};
+let goals={cal:2000,burn:400};
+
+function dKey(d){return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`}
+function vDate(){const d=new Date(NOW);d.setDate(d.getDate()+dayOff);return d}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+// ── Header date ──
+document.getElementById('header-date').textContent=
+  `${DAY_TH[NOW.getDay()]} ${NOW.getDate()} ${MON_SH[NOW.getMonth()]} ${NOW.getFullYear()+543}`;
+
+// ── Firebase ──
+async function loadDay(key){
+  if(cache[key]) return cache[key];
+  try{
+    const s=await getDoc(doc(db,'days',key));
+    cache[key]=s.exists()?{foods:s.data().foods||[],exercises:s.data().exercises||[]}:{foods:[],exercises:[]};
+    setSyncOk();
+  }catch{setSyncErr();cache[key]={foods:[],exercises:[]};}
+  return cache[key];
+}
+async function saveDay(key,foods,exercises){
+  cache[key]={foods,exercises};
+  try{await setDoc(doc(db,'days',key),{foods,exercises});setSyncOk();}catch{setSyncErr();}
+}
+async function loadHabits(){
+  try{const s=await getDoc(doc(db,'meta','habits'));habits=s.exists()?(s.data().list||[]):[];setSyncOk();}catch{setSyncErr();}
+}
+async function saveHabits(){
+  try{await setDoc(doc(db,'meta','habits'),{list:habits});setSyncOk();}catch{setSyncErr();}
+}
+async function loadGoals(){
+  try{const s=await getDoc(doc(db,'meta','goals'));if(s.exists())goals={...goals,...s.data()};setSyncOk();}catch{setSyncErr();}
+}
+async function saveGoalsDB(){
+  try{await setDoc(doc(db,'meta','goals'),goals);setSyncOk();}catch{setSyncErr();}
+}
+async function loadHabitChecks(y,m){
+  try{
+    const s=await getDoc(doc(db,'habitChecks',`habit_${y}_${m}`));
+    if(s.exists())Object.assign(habitChecks,s.data());
+    setSyncOk();
+  }catch{setSyncErr();}
+}
+async function saveHabitCheck(y,m,key,val){
+  habitChecks[key]=val;
+  try{
+    const ref=doc(db,'habitChecks',`habit_${y}_${m}`);
+    const s=await getDoc(ref);
+    const ex=s.exists()?s.data():{};
+    ex[key]=val;
+    await setDoc(ref,ex);setSyncOk();
+  }catch{setSyncErr();}
+}
+
+// ── Goals modal ──
+window.openGoalModal=function(){
+  document.getElementById('goal-cal-in').value=goals.cal;
+  document.getElementById('goal-burn-in').value=goals.burn;
+  document.getElementById('goal-modal').classList.add('open');
+};
+window.closeGoalModal=function(){document.getElementById('goal-modal').classList.remove('open');};
+window.saveGoals=async function(){
+  const c=parseInt(document.getElementById('goal-cal-in').value)||2000;
+  const b=parseInt(document.getElementById('goal-burn-in').value)||400;
+  goals={cal:c,burn:b};
+  await saveGoalsDB();
+  closeGoalModal();
+  renderDay();
+};
+
+// ── Tabs ──
+window.switchTab=function(tab){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['today','habits','history','monthly'][i]===tab));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+  if(tab==='history') renderHistory();
+  if(tab==='monthly') renderMonthly();
+  if(tab==='habits') renderHabitPage();
+};
+
+// ── TODAY ──
+window.changeDay=function(dir){dayOff+=dir;renderDay();};
+async function renderDay(){
+  const d=vDate(),key=dKey(d);
+  const lbl={0:'วันนี้',1:'พรุ่งนี้','-1':'เมื่อวาน'};
+  document.getElementById('day-title').textContent=lbl[dayOff]||`${DAY_TH[d.getDay()]}ที่ ${d.getDate()}`;
+  document.getElementById('day-sub').textContent=`${d.getDate()} ${MON_SH[d.getMonth()]} ${d.getFullYear()+543}`;
+  document.getElementById('btn-next-day').disabled=dayOff>=1;
+  const {foods,exercises}=await loadDay(key);
+  renderFoodList(foods,key);renderExList(exercises,key);updateSummary(foods,exercises);
+}
+function updateSummary(foods,exercises){
+  const cal=foods.reduce((s,f)=>s+f.cal,0);
+  const burn=exercises.reduce((s,e)=>s+e.cal,0);
+  const net=cal-burn;
+  document.getElementById('total-cal').textContent=cal.toLocaleString();
+  document.getElementById('total-burn').textContent=burn.toLocaleString();
+  document.getElementById('bar-food').style.width=Math.min(100,Math.round(cal/goals.cal*100))+'%';
+  document.getElementById('bar-ex').style.width=Math.min(100,Math.round(burn/goals.burn*100))+'%';
+  document.getElementById('sub-food').textContent=`${Math.round(cal/goals.cal*100)}% — เป้า ${goals.cal.toLocaleString()} kcal`;
+  document.getElementById('sub-burn').textContent=`${Math.round(burn/goals.burn*100)}% — เป้า ${goals.burn.toLocaleString()} kcal`;
+  const netEl=document.getElementById('net-cal');
+  netEl.textContent=(net>0?'+':'')+net.toLocaleString()+' kcal';
+  netEl.className='net-value '+(net>200?'net-negative':'net-positive');
+  document.getElementById('net-msg').textContent=!cal&&!burn?'เริ่มบันทึกมื้ออาหาร':net>500?'เกินเป้าหมายวันนี้':net>0?'ใกล้ถึงเป้าหมาย!':'ยอดเยี่ยม! ถึงเป้าหมาย';
+}
+window.toggleForm=function(id){document.getElementById(id).classList.toggle('open');};
+const mIcons={'🌅 เช้า':'🌅','☀️ กลางวัน':'☀️','🌙 เย็น':'🌙','🍪 ของว่าง':'🍪'};
+function renderFoodList(foods,key){
+  const el=document.getElementById('food-list');
+  if(!foods.length){el.innerHTML='<div class="empty-state">ยังไม่มีรายการอาหาร</div>';return;}
+  el.innerHTML=foods.map((f,i)=>`
+    <div class="entry">
+      <div class="entry-icon food">${mIcons[f.meal]||'🍽'}</div>
+      <div class="entry-info">
+        <div class="entry-name">${esc(f.name)}</div>
+        <div class="entry-detail">${f.meal.replace(/^[^ ]+ /,'')}${f.note?' · '+esc(f.note):''}</div>
+      </div>
+      <div class="entry-cal">${f.cal.toLocaleString()} kcal</div>
+      <div class="entry-actions">
+        <button class="icon-btn" onclick="editFood(${i},'${key}')">✏️</button>
+        <button class="icon-btn del" onclick="delFood(${i},'${key}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+window.addFood=async function(){
+  const name=document.getElementById('food-name').value.trim();
+  if(!name){document.getElementById('food-name').focus();return;}
+  const key=dKey(vDate());
+  const {foods,exercises}=await loadDay(key);
+  foods.push({name,cal:parseInt(document.getElementById('food-cal-in').value)||0,meal:document.getElementById('food-meal').value,note:document.getElementById('food-note').value.trim()});
+  await saveDay(key,foods,exercises);
+  ['food-name','food-cal-in','food-note'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ai-badge').style.display='none';
+  document.getElementById('cal-hint').style.display='none';
+  document.getElementById('food-form').classList.remove('open');
+  lastLookedUp='';
+  renderFoodList(foods,key);updateSummary(foods,exercises);
+};
+window.delFood=async function(i,key){
+  const {foods,exercises}=await loadDay(key);
+  if(confirm(`ลบ "${foods[i].name}" ?`)){foods.splice(i,1);await saveDay(key,foods,exercises);renderFoodList(foods,key);updateSummary(foods,exercises);}
+};
+window.editFood=async function(i,key){
+  const {foods,exercises}=await loadDay(key);const f=foods[i];
+  document.getElementById('food-name').value=f.name;document.getElementById('food-cal-in').value=f.cal;
+  document.getElementById('food-note').value=f.note;document.getElementById('food-meal').value=f.meal;
+  foods.splice(i,1);await saveDay(key,foods,exercises);renderFoodList(foods,key);updateSummary(foods,exercises);
+  document.getElementById('food-form').classList.add('open');document.getElementById('food-name').focus();
+};
+function renderExList(exercises,key){
+  const el=document.getElementById('ex-list');
+  if(!exercises.length){el.innerHTML='<div class="empty-state">ยังไม่มีกิจกรรม</div>';return;}
+  el.innerHTML=exercises.map((e,i)=>`
+    <div class="entry">
+      <div class="entry-icon exercise">🏃</div>
+      <div class="entry-info">
+        <div class="entry-name">${esc(e.name)}</div>
+        <div class="entry-detail">${e.min} นาที</div>
+      </div>
+      <div class="entry-cal">${e.cal.toLocaleString()} kcal</div>
+      <div class="entry-actions">
+        <button class="icon-btn" onclick="editEx(${i},'${key}')">✏️</button>
+        <button class="icon-btn del" onclick="delEx(${i},'${key}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+window.addExercise=async function(){
+  const name=document.getElementById('ex-name').value.trim();
+  if(!name){document.getElementById('ex-name').focus();return;}
+  const key=dKey(vDate());
+  const {foods,exercises}=await loadDay(key);
+  exercises.push({name,min:parseInt(document.getElementById('ex-min').value)||0,cal:parseInt(document.getElementById('ex-cal-in').value)||0});
+  await saveDay(key,foods,exercises);
+  ['ex-name','ex-min','ex-cal-in'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ex-form').classList.remove('open');
+  renderExList(exercises,key);updateSummary(foods,exercises);
+};
+window.delEx=async function(i,key){
+  const {foods,exercises}=await loadDay(key);
+  if(confirm(`ลบ "${exercises[i].name}" ?`)){exercises.splice(i,1);await saveDay(key,foods,exercises);renderExList(exercises,key);updateSummary(foods,exercises);}
+};
+window.editEx=async function(i,key){
+  const {foods,exercises}=await loadDay(key);const e=exercises[i];
+  document.getElementById('ex-name').value=e.name;document.getElementById('ex-min').value=e.min;document.getElementById('ex-cal-in').value=e.cal;
+  exercises.splice(i,1);await saveDay(key,foods,exercises);renderExList(exercises,key);updateSummary(foods,exercises);
+  document.getElementById('ex-form').classList.add('open');document.getElementById('ex-name').focus();
+};
+
+// ══════════════════════════════════════════
+//  HABIT TRACKER
+// ══════════════════════════════════════════
+window.changeHabitMonth=function(dir){
+  hMonth.m+=dir;
+  if(hMonth.m>11){hMonth.m=0;hMonth.y++;}
+  if(hMonth.m<0){hMonth.m=11;hMonth.y--;}
+  document.getElementById('btn-next-hmonth').disabled=hMonth.y===NOW.getFullYear()&&hMonth.m===NOW.getMonth();
+  renderHabitPage();
+};
+
+window.toggleHabitForm=function(){document.getElementById('habit-add-form').classList.toggle('open');};
+
+async function renderHabitPage(){
+  const{y,m}=hMonth;
+  document.getElementById('habit-month-title').textContent=`${MON_TH[m]} ${y+543}`;
+  document.getElementById('btn-next-hmonth').disabled=y===NOW.getFullYear()&&m===NOW.getMonth();
+  await loadHabitChecks(y,m);
+  renderHabitChart(y,m);
+  renderHabitTable(y,m);
+}
+
+function renderHabitChart(y,m){
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const todayStr=dKey(NOW);
+  const labels=[],data=[],bgColors=[];
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(y,m,d);
+    if(date>NOW) break;
+    const dk=dKey(date);
+    const done=habits.filter(h=>habitChecks[`${dk}_${h.id}`]).length;
+    const pct=habits.length?Math.round(done/habits.length*100):0;
+    labels.push(d);
+    data.push(pct);
+    bgColors.push(dk===todayStr?'#c9796a':'rgba(201,121,106,0.5)');
+  }
+
+  // stats
+  document.getElementById('h-total').textContent=habits.length;
+  const todayDone=habits.filter(h=>habitChecks[`${todayStr}_${h.id}`]).length;
+  document.getElementById('h-today-done').textContent=todayDone;
+  const avg=data.length?Math.round(data.reduce((s,v)=>s+v,0)/data.length):0;
+  document.getElementById('h-month-pct').textContent=avg+'%';
+
+  if(hChart){hChart.destroy();hChart=null;}
+  const ctx=document.getElementById('habit-chart').getContext('2d');
+  hChart=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'% สำเร็จ',data,
+        borderColor:'#c9796a',backgroundColor:'rgba(201,121,106,0.15)',
+        borderWidth:2,pointRadius:3,pointBackgroundColor:bgColors,
+        fill:true,tension:0.4
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y}%`}}},
+      scales:{
+        x:{ticks:{font:{size:9},color:'#9f9f99',autoSkip:true,maxTicksLimit:16},grid:{display:false}},
+        y:{min:0,max:100,ticks:{font:{size:9},color:'#9f9f99',callback:v=>v+'%'},grid:{color:'rgba(128,128,128,0.1)'}}
+      }
+    }
+  });
+}
+
+function isMobile(){return window.innerWidth<=600;}
+
+function renderHabitTable(y,m){
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const todayStr=dKey(NOW);
+
+  if(!habits.length){
+    document.getElementById('habit-table-wrap').innerHTML='<div class="empty-state">ยังไม่มี Habit — กดปุ่ม + เพิ่ม Habit</div>';
+    return;
+  }
+
+  const scrollEl=document.getElementById('habit-scroll');
+  const availW=scrollEl.clientWidth||window.innerWidth;
+  const mobile=isMobile();
+  const nameColW=Math.max(90,Math.min(130,availW*(mobile?0.3:0.22)));
+  const actColW=28, countColW=28;
+
+  // mobile: show 4 cols fixed (today + 3 days before), rest scrollable
+  const VISIBLE=4;
+  let visibleDays=[];
+  if(mobile){
+    // build list: today index in month
+    const todayDate=new Date(NOW.getFullYear(),NOW.getMonth(),NOW.getDate());
+    for(let d=1;d<=daysInMonth;d++){
+      const date=new Date(y,m,d);
+      visibleDays.push({d,date,dk:dKey(date),pinned:false});
+    }
+    // mark last VISIBLE days up to today as pinned (sticky visible)
+    const todayIdx=visibleDays.findIndex(x=>x.dk===todayStr);
+    const pinStart=Math.max(0,todayIdx-3);
+    const pinEnd=todayIdx>=0?todayIdx:visibleDays.length-1;
+    for(let i=pinStart;i<=pinEnd;i++) visibleDays[i].pinned=true;
+  } else {
+    for(let d=1;d<=daysInMonth;d++){
+      const date=new Date(y,m,d);
+      visibleDays.push({d,date,dk:dKey(date),pinned:false});
+    }
+  }
+
+  // cell width
+  let cellW;
+  if(mobile){
+    const remaining=availW-nameColW-actColW-countColW;
+    cellW=Math.floor(remaining/VISIBLE);
+  } else {
+    const remaining=availW-nameColW-actColW-countColW;
+    cellW=Math.max(22,Math.floor(remaining/daysInMonth));
+  }
+
+  // on mobile, total table width = name + VISIBLE*cell + count + act (scrollable for older days)
+  const totalW=mobile?(nameColW+daysInMonth*cellW+countColW+actColW):'100%';
+
+  let html=`<table class="habit-tbl" style="width:${totalW};${mobile?'min-width:'+totalW+'px;':''}">
+  <thead><tr>
+    <th class="col-name" style="width:${nameColW}px;min-width:${nameColW}px;">Habit</th>`;
+
+  visibleDays.forEach(({d,date,dk})=>{
+    const isT=dk===todayStr;
+    html+=`<th class="${isT?'col-today':''}" style="width:${cellW}px;min-width:${cellW}px;">${d}<br><span style="font-weight:400;">${DAY_SH[date.getDay()]}</span></th>`;
+  });
+  html+=`<th style="width:${countColW}px;">รวม</th><th style="width:${actColW}px;"></th></tr></thead><tbody>`;
+
+  habits.forEach(h=>{
+    let count=0;
+    // count all days in month for total
+    for(let d=1;d<=daysInMonth;d++){
+      const dk2=dKey(new Date(y,m,d));
+      if(habitChecks[`${dk2}_${h.id}`]) count++;
+    }
+    html+=`<tr>
+      <td class="col-name" style="width:${nameColW}px;min-width:${nameColW}px;">
+        <div class="habit-name-inner">
+          <span class="habit-name-text" id="hnt-${h.id}" title="${esc(h.name)}">${h.emoji?h.emoji+' ':''}${esc(h.name)}</span>
+          <input class="habit-name-input" id="hni-${h.id}" value="${esc(h.name)}" style="display:none;" onblur="saveHabitName('${h.id}')" onkeydown="if(event.key==='Enter')saveHabitName('${h.id}')"/>
+          <span class="habit-edit-icon" onclick="startEditHabit('${h.id}')" title="แก้ไขชื่อ">✏️</span>
+        </div>
+      </td>`;
+    visibleDays.forEach(({date,dk})=>{
+      const isT=dk===todayStr;
+      const isFuture=date>NOW;
+      const checked=!!habitChecks[`${dk}_${h.id}`];
+      html+=`<td class="${isT?'col-today':''}" style="width:${cellW}px;min-width:${cellW}px;">
+        <div class="hchk${checked?' done':''}${isFuture?' future':''}" onclick="toggleHabit('${dk}','${h.id}')">${checked?'✓':''}</div>
+      </td>`;
+    });
+    html+=`<td class="col-count" style="width:${countColW}px;">${count}</td>
+      <td class="col-actions" style="width:${actColW}px;"><button class="habit-del-btn" onclick="delHabit('${h.id}')">🗑</button></td>
+    </tr>`;
+  });
+
+  // % row
+  html+=`<tr><td class="col-name" style="font-size:10px;color:var(--text3);padding:5px 10px;">% สำเร็จ</td>`;
+  visibleDays.forEach(({date,dk,d})=>{
+    const isT=dk===todayStr;
+    if(date>NOW){html+=`<td class="${isT?'col-today':''}"></td>`;return;}
+    const done=habits.filter(h=>habitChecks[`${dk}_${h.id}`]).length;
+    const pct=habits.length?Math.round(done/habits.length*100):0;
+    const col=pct>=80?'var(--green)':pct>=50?'var(--blue)':'var(--text3)';
+    html+=`<td class="pct-cell ${isT?'col-today':''}" style="color:${col};">${pct}%</td>`;
+  });
+  html+=`<td></td><td></td></tr>`;
+  html+=`</tbody></table>`;
+  document.getElementById('habit-table-wrap').innerHTML=html;
+
+  // mobile: auto-scroll so today column is visible (rightmost of pinned cols)
+  if(mobile){
+    const todayIdx=visibleDays.findIndex(x=>x.dk===todayStr);
+    if(todayIdx>=0){
+      const scrollTo=nameColW+(todayIdx-VISIBLE+1)*cellW;
+      scrollEl.scrollLeft=Math.max(0,scrollTo);
+    }
+  }
+}
+
+// inline edit habit name
+window.startEditHabit=function(id){
+  document.getElementById('hnt-'+id).style.display='none';
+  const inp=document.getElementById('hni-'+id);
+  inp.style.display='inline-block';
+  inp.focus();inp.select();
+};
+window.saveHabitName=async function(id){
+  const inp=document.getElementById('hni-'+id);
+  if(!inp) return;
+  const newName=inp.value.trim();
+  if(newName){
+    const h=habits.find(x=>x.id===id);
+    if(h){h.name=newName;await saveHabits();}
+  }
+  await renderHabitPage();
+};
+
+window.addHabit=async function(){
+  const name=document.getElementById('habit-name-in').value.trim();
+  if(!name){document.getElementById('habit-name-in').focus();return;}
+  const emoji=document.getElementById('habit-emoji').value.trim();
+  habits.push({id:'h'+Date.now(),name,emoji});
+  await saveHabits();
+  document.getElementById('habit-name-in').value='';
+  document.getElementById('habit-emoji').value='';
+  document.getElementById('habit-add-form').classList.remove('open');
+  renderHabitPage();
+};
+window.delHabit=async function(id){
+  const h=habits.find(x=>x.id===id);
+  if(confirm(`ลบ habit "${h?.name}" ?`)){habits=habits.filter(x=>x.id!==id);await saveHabits();renderHabitPage();}
+};
+window.toggleHabit=async function(dk,hid){
+  const[y,m]=dk.split('-').map(Number);
+  const key=`${dk}_${hid}`;
+  await saveHabitCheck(y,m,key,!habitChecks[key]);
+  renderHabitPage();
+};
+
+// ── HISTORY ──
+async function renderHistory(){
+  const el=document.getElementById('history-list');
+  el.innerHTML='<div class="empty-state">กำลังโหลด...</div>';
+  try{
+    const snap=await getDocs(collection(db,'days'));
+    const keys=[];snap.forEach(d=>keys.push(d.id));
+    keys.sort((a,b)=>{const pa=a.split('-').map(Number),pb=b.split('-').map(Number);return new Date(pb[0],pb[1],pb[2])-new Date(pa[0],pa[1],pa[2]);});
+    if(!keys.length){el.innerHTML='<div class="empty-state" style="padding:36px;">ยังไม่มีประวัติ</div>';return;}
+    const rows=await Promise.all(keys.map(async key=>{
+      const{foods,exercises}=await loadDay(key);
+      const[y,m,d]=key.split('-').map(Number);
+      const date=new Date(y,m,d);
+      const cal=foods.reduce((s,f)=>s+f.cal,0),burn=exercises.reduce((s,e)=>s+e.cal,0),net=cal-burn;
+      const nc=net>200?'var(--red)':'var(--green)';
+      return `<div class="hist-item" onclick="goToDay('${key}')">
+        <div><div class="hist-date">${d} ${MON_SH[m]}</div><div class="hist-date-sub">${DAY_TH[date.getDay()]}${dKey(NOW)===key?' · วันนี้':''}</div></div>
+        <div class="hbars">
+          <div class="hbar-row"><div class="hbar-lbl">🍽 ${cal} kcal</div><div class="hbar-track"><div class="hbar-fill fill-green" style="width:${Math.min(100,Math.round(cal/goals.cal*100))}%"></div></div></div>
+          <div class="hbar-row"><div class="hbar-lbl">🔥 ${burn} kcal</div><div class="hbar-track"><div class="hbar-fill fill-blue" style="width:${Math.min(100,Math.round(burn/goals.burn*100))}%"></div></div></div>
+        </div>
+        <div class="hist-net" style="color:${nc}">${net>0?'+':''}${net}</div>
+        <div class="hist-arrow">›</div>
+      </div>`;
+    }));
+    el.innerHTML=rows.join('');setSyncOk();
+  }catch{setSyncErr();document.getElementById('history-list').innerHTML='<div class="empty-state">โหลดไม่ได้ — เช็คการเชื่อมต่อ</div>';}
+}
+window.goToDay=function(key){
+  const[y,m,d]=key.split('-').map(Number);
+  const target=new Date(y,m,d),today=new Date(NOW.getFullYear(),NOW.getMonth(),NOW.getDate());
+  dayOff=Math.round((target-today)/86400000);
+  switchTab('today');renderDay();
+};
+
+// ── MONTHLY ──
+window.changeMonth=function(dir){
+  vMonth.m+=dir;
+  if(vMonth.m>11){vMonth.m=0;vMonth.y++;}
+  if(vMonth.m<0){vMonth.m=11;vMonth.y--;}
+  renderMonthly();
+};
+async function renderMonthly(){
+  const{y,m}=vMonth;
+  document.getElementById('month-title').textContent=`${MON_TH[m]} ${y+543}`;
+  document.getElementById('btn-next-month').disabled=y===NOW.getFullYear()&&m===NOW.getMonth();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const dayData=[];
+  for(let d=1;d<=daysInMonth;d++){
+    const key=dKey(new Date(y,m,d));
+    const{foods,exercises}=await loadDay(key);
+    const cal=foods.reduce((s,f)=>s+f.cal,0),burn=exercises.reduce((s,e)=>s+e.cal,0);
+    dayData.push({d,key,cal,burn,has:foods.length>0||exercises.length>0});
+  }
+  const wd=dayData.filter(x=>x.has);
+  document.getElementById('m-days').textContent=wd.length;
+  document.getElementById('m-avg-cal').textContent=wd.length?Math.round(wd.reduce((s,x)=>s+x.cal,0)/wd.length).toLocaleString():0;
+  document.getElementById('m-avg-burn').textContent=wd.length?Math.round(wd.reduce((s,x)=>s+x.burn,0)/wd.length).toLocaleString():0;
+  if(mChart){mChart.destroy();mChart=null;}
+  const ctx=document.getElementById('monthly-chart').getContext('2d');
+  mChart=new Chart(ctx,{type:'bar',data:{labels:dayData.map(x=>x.d),datasets:[
+    {label:'รับเข้า',data:dayData.map(x=>x.cal),backgroundColor:'#1D9E7566',borderColor:'#1D9E75',borderWidth:1,borderRadius:3},
+    {label:'เผาผลาญ',data:dayData.map(x=>x.burn),backgroundColor:'#378ADD66',borderColor:'#378ADD',borderWidth:1,borderRadius:3}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:9},color:'#9f9f99',autoSkip:true,maxTicksLimit:16},grid:{display:false}},
+            y:{ticks:{font:{size:9},color:'#9f9f99'},grid:{color:'rgba(128,128,128,0.1)'}}}}});
+  const dl=document.getElementById('monthly-day-list');
+  if(!wd.length){dl.innerHTML='<div class="empty-state">ยังไม่มีข้อมูลในเดือนนี้</div>';return;}
+  dl.innerHTML=wd.map(x=>{
+    const date=new Date(y,m,x.d),net=x.cal-x.burn,nc=net>200?'var(--red)':'var(--green)';
+    return `<div class="hist-item" onclick="goToDay('${x.key}')">
+      <div><div class="hist-date">${x.d} ${MON_SH[m]}</div><div class="hist-date-sub">${DAY_TH[date.getDay()]}</div></div>
+      <div class="hbars">
+        <div class="hbar-row"><div class="hbar-lbl">🍽 ${x.cal}</div><div class="hbar-track"><div class="hbar-fill fill-green" style="width:${Math.min(100,Math.round(x.cal/goals.cal*100))}%"></div></div></div>
+        <div class="hbar-row"><div class="hbar-lbl">🔥 ${x.burn}</div><div class="hbar-track"><div class="hbar-fill fill-blue" style="width:${Math.min(100,Math.round(x.burn/goals.burn*100))}%"></div></div></div>
+      </div>
+      <div style="font-size:12px;font-weight:700;min-width:44px;text-align:right;color:${nc}">${net>0?'+':''}${net}</div>
+      <div class="hist-arrow">›</div>
+    </div>`;
+  }).join('');
+}
+
+// ── AI Cal ──
+let calTimer=null,lastLookedUp='';
+window.onFoodInput=function(){
+  const name=document.getElementById('food-name').value.trim();
+  clearTimeout(calTimer);
+  document.getElementById('ai-badge').style.display='none';
+  document.getElementById('cal-hint').style.display='none';
+  if(name.length<2) return;
+  calTimer=setTimeout(triggerCalLookup,900);
+};
+window.triggerCalLookup=async function(){
+  const name=document.getElementById('food-name').value.trim();
+  if(!name||name===lastLookedUp||name.length<2) return;
+  lastLookedUp=name;
+  const sp=document.getElementById('cal-spinner'),bg=document.getElementById('ai-badge'),ht=document.getElementById('cal-hint'),ci=document.getElementById('food-cal-in');
+  sp.style.display='inline';ht.style.display='none';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,
+        system:'Nutrition expert. Respond ONLY with JSON: {"calories":350,"per":"1 จาน (300g)"}. Integer only. JSON only.',
+        messages:[{role:'user',content:`Food: ${name}`}]})});
+    const data=await res.json();
+    const parsed=JSON.parse(data.content?.map(c=>c.text||'').join('').replace(/```json|```/g,'').trim());
+    if(parsed.calories&&!ci.value){ci.value=parsed.calories;bg.style.display='inline';ht.textContent=`✦ AI ประมาณ ${parsed.calories} kcal ต่อ ${parsed.per||'1 จาน'} — แก้ไขได้`;ht.style.display='block';}
+  }catch{}finally{sp.style.display='none';}
+};
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    if(document.getElementById('food-form').classList.contains('open')) window.addFood();
+    else if(document.getElementById('ex-form').classList.contains('open')) window.addExercise();
+  }
+});
+
+// re-render table on resize
+let resizeTimer;
+window.addEventListener('resize',()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(()=>{
+    if(document.getElementById('page-habits').classList.contains('active')) renderHabitPage();
+  },200);
+});
+
+// ── INIT ──
+await loadGoals();
+await loadHabits();
+renderDay();
+</script>
+</body>
+</html>
